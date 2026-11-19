@@ -5,6 +5,7 @@ async function readResponse(response) {
   const text = await response.text();
 
   let data = {};
+
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
@@ -12,13 +13,23 @@ async function readResponse(response) {
   }
 
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error("Invalid credentials or session expired.");
+    }
+
+    if (response.status === 403) {
+      throw new Error("Access denied or security token expired.");
+    }
+
+    if (response.status === 409) {
+      throw new Error("This email is already registered.");
+    }
+
     throw new Error(
-      response.status === 401
-        ? "Invalid credentials or session expired."
-        : response.status === 403
-          ? "You do not have permission to access this page."
-          : data.detail || data.message || data.error ||
-            "Request failed."
+      data.detail ||
+      data.message ||
+      data.error ||
+      "Something went wrong."
     );
   }
 
@@ -99,13 +110,29 @@ export async function getRoleDashboard(role) {
   };
 
   if (!paths[role]) {
-    throw new Error("Invalid user role.");
+    throw new Error("Unknown account role.");
   }
 
-  const response = await fetch(
-    `${API_URL}${paths[role]}`,
-    { credentials: "include" }
-  );
+  const response = await fetch(`${API_URL}${paths[role]}`, {
+    credentials: "include"
+  });
+
+  return readResponse(response);
+}
+
+// Only an authenticated ADMIN can call this endpoint.
+export async function createTailorAccount(values) {
+  const csrf = await getCsrf();
+
+  const response = await fetch(`${API_URL}/api/admin/staff`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      [csrf.headerName]: csrf.token
+    },
+    body: JSON.stringify(values)
+  });
 
   return readResponse(response);
 }

@@ -13,10 +13,11 @@ import {
   loginUser,
   logoutUser,
   getCurrentUser,
-  getRoleDashboard
+  getRoleDashboard,
+  createTailorAccount
 } from "./api";
 
-const homeFor = (role) => {
+const dashboardPath = (role) => {
   if (role === "ADMIN") return "/admin";
   if (role === "TAILOR") return "/tailor";
   return "/customer";
@@ -24,6 +25,7 @@ const homeFor = (role) => {
 
 function Login({ onLogin }) {
   const navigate = useNavigate();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -36,9 +38,13 @@ function Login({ onLogin }) {
 
     try {
       await loginUser(email, password);
+
       const account = await getCurrentUser();
+
       onLogin(account);
-      navigate(homeFor(account.role), { replace: true });
+      navigate(dashboardPath(account.role), {
+        replace: true
+      });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -50,6 +56,7 @@ function Login({ onLogin }) {
     <div className="auth-page">
       <div className="auth-card">
         <div className="brand-mark">✂</div>
+
         <h1>Welcome to StitchFlow</h1>
         <p>Sign in to your tailoring account.</p>
 
@@ -59,18 +66,18 @@ function Login({ onLogin }) {
           <label>Email Address</label>
           <input
             type="email"
-            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            required
             placeholder="you@example.com"
           />
 
           <label>Password</label>
           <input
             type="password"
-            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
             placeholder="Enter password"
           />
 
@@ -80,7 +87,8 @@ function Login({ onLogin }) {
         </form>
 
         <p className="footer-text">
-          New customer? <Link to="/register">Create an account</Link>
+          New customer?{" "}
+          <Link to="/register">Create an account</Link>
         </p>
       </div>
     </div>
@@ -125,6 +133,7 @@ function Register() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="brand-mark">✂</div>
+
         <h1>Create an Account</h1>
         <p>Register as a StitchFlow customer.</p>
 
@@ -156,9 +165,9 @@ function Register() {
             type="password"
             value={form.password}
             onChange={update}
-            required
             minLength={8}
             maxLength={72}
+            required
             placeholder="At least 8 characters"
           />
 
@@ -168,7 +177,8 @@ function Register() {
         </form>
 
         <p className="footer-text">
-          Already registered? <Link to="/login">Sign In</Link>
+          Already registered?{" "}
+          <Link to="/login">Sign In</Link>
         </p>
       </div>
     </div>
@@ -176,20 +186,138 @@ function Register() {
 }
 
 function Protected({ user, role, children }) {
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (user.role !== role) {
-    return <Navigate to={homeFor(user.role)} replace />;
+    return (
+      <Navigate
+        to={dashboardPath(user.role)}
+        replace
+      />
+    );
   }
 
   return children;
 }
 
+// ADMIN ONLY: CREATE A TAILOR ACCOUNT
+function CreateTailor() {
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    password: ""
+  });
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  function update(e) {
+    setForm({
+      ...form,
+      [e.target.name]: e.target.value
+    });
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+
+    setError("");
+    setSuccess("");
+    setLoading(true);
+
+    try {
+      const created = await createTailorAccount(form);
+
+      setSuccess(
+        `Tailor account created for ${created.fullName} (${created.email}).`
+      );
+
+      setForm({
+        fullName: "",
+        email: "",
+        password: ""
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="content">
+      <h1>Create Tailor Account</h1>
+      <p>Register a staff member for your tailoring shop.</p>
+
+      <div className="info-card">
+        <h2>Staff Registration</h2>
+
+        {error && (
+          <div className="error">{error}</div>
+        )}
+
+        {success && (
+          <p role="status" style={{ color: "#27734a" }}>
+            {success}
+          </p>
+        )}
+
+        <form onSubmit={submit}>
+          <label>Tailor Full Name</label>
+          <input
+            type="text"
+            name="fullName"
+            value={form.fullName}
+            onChange={update}
+            required
+            placeholder="Enter staff name"
+          />
+
+          <label>Email Address</label>
+          <input
+            type="email"
+            name="email"
+            value={form.email}
+            onChange={update}
+            required
+            placeholder="staff@example.com"
+          />
+
+          <label>Initial Password</label>
+          <input
+            type="password"
+            name="password"
+            value={form.password}
+            onChange={update}
+            required
+            minLength={8}
+            maxLength={72}
+            placeholder="At least 8 characters"
+          />
+
+          <button disabled={loading}>
+            {loading ? "Creating..." : "Create Tailor Account"}
+          </button>
+        </form>
+
+        <p>
+          The new account will automatically receive
+          the <strong>TAILOR</strong> role.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ user, onLogout }) {
   const navigate = useNavigate();
+
+  const [section, setSection] = useState("dashboard");
   const [serverMessage, setServerMessage] = useState("");
   const [error, setError] = useState("");
-  const [section, setSection] = useState("dashboard");
 
   const titles = {
     CUSTOMER: "Customer Dashboard",
@@ -201,17 +329,25 @@ function Dashboard({ user, onLogout }) {
     let active = true;
 
     getRoleDashboard(user.role)
-      .then((data) => {
-        if (active) setServerMessage(data.message);
+      .then((result) => {
+        if (active) {
+          setServerMessage(result.message);
+        }
       })
       .catch((err) => {
-        if (active) setError(err.message);
+        if (active) {
+          setError(err.message);
+        }
       });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [user.role]);
 
   async function handleLogout() {
+    setError("");
+
     try {
       await logoutUser();
       onLogout();
@@ -224,8 +360,13 @@ function Dashboard({ user, onLogout }) {
   return (
     <div className="app-layout">
       <aside className="sidebar">
-        <div className="sidebar-brand">✂ StitchFlow</div>
-        <div className="side-label">{user.role}</div>
+        <div className="sidebar-brand">
+          ✂ StitchFlow
+        </div>
+
+        <div className="side-label">
+          {user.role}
+        </div>
 
         <button
           className="side-link"
@@ -233,6 +374,15 @@ function Dashboard({ user, onLogout }) {
         >
           Dashboard
         </button>
+
+        {user.role === "ADMIN" && (
+          <button
+            className="side-link"
+            onClick={() => setSection("staff")}
+          >
+            Create Tailor Account
+          </button>
+        )}
 
         <button
           className="side-link"
@@ -255,22 +405,32 @@ function Dashboard({ user, onLogout }) {
           <strong>{user.fullName}</strong>
         </header>
 
-        {error && <div className="error">{error}</div>}
+        {error && (
+          <div className="error">{error}</div>
+        )}
 
-        {section === "dashboard" ? (
+        {section === "dashboard" && (
           <div className="content">
             <h1>Hello, {user.fullName}!</h1>
+
             <p>Welcome to your StitchFlow dashboard.</p>
 
             <div className="info-card">
               <h2>{titles[user.role]}</h2>
-              <p>{serverMessage || "Checking backend access..."}</p>
+
+              <p>
+                {serverMessage ||
+                  "Verifying dashboard access..."}
+              </p>
+
               <p>
                 Signed in as <strong>{user.role}</strong>
               </p>
             </div>
           </div>
-        ) : (
+        )}
+
+        {section === "profile" && (
           <div className="content">
             <h1>My Account</h1>
 
@@ -281,6 +441,10 @@ function Dashboard({ user, onLogout }) {
               <p><strong>User ID:</strong> {user.id}</p>
             </div>
           </div>
+        )}
+
+        {section === "staff" && user.role === "ADMIN" && (
+          <CreateTailor />
         )}
       </main>
     </div>
@@ -299,7 +463,11 @@ export default function App() {
   }, []);
 
   if (!ready) {
-    return <div className="loading">Loading StitchFlow...</div>;
+    return (
+      <div className="loading">
+        Loading StitchFlow...
+      </div>
+    );
   }
 
   return (
@@ -308,7 +476,7 @@ export default function App() {
         path="/"
         element={
           <Navigate
-            to={user ? homeFor(user.role) : "/login"}
+            to={user ? dashboardPath(user.role) : "/login"}
             replace
           />
         }
@@ -317,25 +485,35 @@ export default function App() {
       <Route
         path="/login"
         element={
-          user
-            ? <Navigate to={homeFor(user.role)} replace />
-            : <Login onLogin={setUser} />
+          user ? (
+            <Navigate
+              to={dashboardPath(user.role)}
+              replace
+            />
+          ) : (
+            <Login onLogin={setUser} />
+          )
         }
       />
 
       <Route
         path="/register"
         element={
-          user
-            ? <Navigate to={homeFor(user.role)} replace />
-            : <Register />
+          user ? (
+            <Navigate
+              to={dashboardPath(user.role)}
+              replace
+            />
+          ) : (
+            <Register />
+          )
         }
       />
 
       {["CUSTOMER", "TAILOR", "ADMIN"].map((role) => (
         <Route
           key={role}
-          path={homeFor(role)}
+          path={dashboardPath(role)}
           element={
             <Protected user={user} role={role}>
               <Dashboard
@@ -347,7 +525,10 @@ export default function App() {
         />
       ))}
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route
+        path="*"
+        element={<Navigate to="/" replace />}
+      />
     </Routes>
   );
 }
