@@ -1,20 +1,25 @@
 
-# Secrets
+# Java / Spring Boot
+**/target/
+*.class
+
+# React / Vite
+**/node_modules/
+**/dist/
+
+# Environment variables and secrets
 .env
 .env.*
 !.env.example
 
-# Java
-**/target/
-*.class
-
-# React
-**/node_modules/
-**/dist/
-
-# IDE
+# IDE files
 .vscode/
 .idea/
 
 # Local settings
 *.log
+.DS_Store
+
+# Android (future)
+.gradle/
+local.properties
