@@ -1,9 +1,7 @@
-
 const API_URL = "http://localhost:8080";
 
 async function readResponse(response) {
   const text = await response.text();
-
   let data = {};
 
   try {
@@ -14,22 +12,17 @@ async function readResponse(response) {
 
   if (!response.ok) {
     if (response.status === 401) {
-      throw new Error("Invalid credentials or session expired.");
+      throw new Error("Incorrect login information or your session has expired.");
     }
-
     if (response.status === 403) {
-      throw new Error("Access denied or security token expired.");
+      throw new Error("Access denied. Please refresh the page and try again.");
     }
-
     if (response.status === 409) {
-      throw new Error("This email is already registered.");
+      throw new Error(data.detail || "That email address is already registered.");
     }
 
     throw new Error(
-      data.detail ||
-      data.message ||
-      data.error ||
-      "Something went wrong."
+      data.detail || data.message || data.error || "Something went wrong. Please try again."
     );
   }
 
@@ -38,31 +31,31 @@ async function readResponse(response) {
 
 async function getCsrf() {
   const response = await fetch(`${API_URL}/api/auth/csrf`, {
-    credentials: "include"
+    credentials: "include",
   });
-
   return readResponse(response);
 }
 
-export async function registerCustomer(values) {
+async function writeJson(path, method, values) {
   const csrf = await getCsrf();
-
-  const response = await fetch(`${API_URL}/api/auth/register`, {
-    method: "POST",
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
-      [csrf.headerName]: csrf.token
+      [csrf.headerName]: csrf.token,
     },
-    body: JSON.stringify(values)
+    body: JSON.stringify(values),
   });
-
   return readResponse(response);
+}
+
+export function registerCustomer(values) {
+  return writeJson("/api/auth/register", "POST", values);
 }
 
 export async function loginUser(email, password) {
   const csrf = await getCsrf();
-
   const form = new URLSearchParams();
   form.set("email", email);
   form.set("password", password);
@@ -72,33 +65,27 @@ export async function loginUser(email, password) {
     credentials: "include",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      [csrf.headerName]: csrf.token
+      [csrf.headerName]: csrf.token,
     },
-    body: form.toString()
+    body: form.toString(),
   });
-
   return readResponse(response);
 }
 
 export async function getCurrentUser() {
   const response = await fetch(`${API_URL}/api/auth/me`, {
-    credentials: "include"
+    credentials: "include",
   });
-
   return readResponse(response);
 }
 
 export async function logoutUser() {
   const csrf = await getCsrf();
-
   const response = await fetch(`${API_URL}/api/auth/logout`, {
     method: "POST",
     credentials: "include",
-    headers: {
-      [csrf.headerName]: csrf.token
-    }
+    headers: { [csrf.headerName]: csrf.token },
   });
-
   return readResponse(response);
 }
 
@@ -106,7 +93,7 @@ export async function getRoleDashboard(role) {
   const paths = {
     CUSTOMER: "/api/customer/dashboard",
     TAILOR: "/api/tailor/dashboard",
-    ADMIN: "/api/admin/dashboard"
+    ADMIN: "/api/admin/dashboard",
   };
 
   if (!paths[role]) {
@@ -114,25 +101,36 @@ export async function getRoleDashboard(role) {
   }
 
   const response = await fetch(`${API_URL}${paths[role]}`, {
-    credentials: "include"
+    credentials: "include",
   });
-
   return readResponse(response);
 }
 
-// Only an authenticated ADMIN can call this endpoint.
-export async function createTailorAccount(values) {
-  const csrf = await getCsrf();
+export function createTailorAccount(values) {
+  return writeJson("/api/admin/staff", "POST", values);
+}
 
-  const response = await fetch(`${API_URL}/api/admin/staff`, {
-    method: "POST",
+// Increment 2: These routes require an authenticated session.
+export async function getProfile() {
+  const response = await fetch(`${API_URL}/api/profile`, {
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      [csrf.headerName]: csrf.token
-    },
-    body: JSON.stringify(values)
   });
-
   return readResponse(response);
+}
+
+export function updateProfile(values) {
+  return writeJson("/api/profile", "PUT", values);
+}
+
+export function changePassword(values) {
+  return writeJson("/api/profile/change-password", "POST", values);
+}
+
+// Public, CSRF-protected password recovery endpoints.
+export function forgotPassword(values) {
+  return writeJson("/api/auth/forgot-password", "POST", values);
+}
+
+export function resetPassword(values) {
+  return writeJson("/api/auth/reset-password", "POST", values);
 }
